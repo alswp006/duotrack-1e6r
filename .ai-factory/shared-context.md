@@ -182,3 +182,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0004: 외부 AI API 클라이언트 (files: src/lib/api.ts)
 - 0002: localStorage CRUD 헬퍼 + 손상/용량 방어 (files: src/lib/storage.ts)
 - 0003: 앱 상태 Context + 로딩 + 구독 게이트 (files: src/lib/store.tsx)
+- 0005: 집계·무결성·프로모션 순수 유틸 (files: src/lib/integrity.ts, src/lib/analytics.ts, src/lib/promo.ts)
