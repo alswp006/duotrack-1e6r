@@ -137,6 +137,7 @@ export type RouteState = {
     TossRewardAd.tsx
   hooks/
   lib/
+    api.ts
     storage.ts
     types.ts
     utils.ts
@@ -151,7 +152,8 @@ export type RouteState = {
   vite-env.d.ts
 
 ### Exports (src/lib/)
-- storage.ts: export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): void; export function removeItem(key: string): void
+- api.ts: export async function diagnose( req: DiagnoseRequest ): Promise<DiagnoseResponse |; export async function generateProblems( req: GenerateProblemsRequest ): Promise<GenerateResponse |
+- storage.ts: export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): void; export function removeItem(key: string): void; export function getProfile(): UserProfile | null; export function setProfile(profile: UserProfile): StorageResult; export function getSessions(): StudySession[]; export function addSession(session: StudySession): StorageResult; export function getExams(): MockExamResult[]
 - types.ts: export type TargetExam = "TOEIC" | "OPIC" | "TEPS"; export type ExamType = "MOCK" | "REAL"; export interface UserProfile; export interface StudySession; export interface MockExamResult; export interface GeneratedProblem; export interface AppMeta; export interface DiagnoseRequest
 - utils.ts: export function cn(...classes: (string | boolean | undefined | null)[]): string; export function formatNumber(n: number): string; export function formatCurrency(n: number, currency = 'KRW'): string
 
@@ -170,7 +172,11 @@ export type RouteState = {
 - SummaryHero.tsx: SummaryHero
 - TossPurchase.tsx: TossPurchase
 - TossRewardAd.tsx: TossRewardAd
+
+### Module Dependencies (import graph)
+  lib/api.ts → imports: lib/types
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
 
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 엔티티 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
+- 0004: 외부 AI API 클라이언트 (files: src/lib/api.ts)
