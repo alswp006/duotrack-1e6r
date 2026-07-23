@@ -22,6 +22,36 @@ interface GenerateProblemsRequest {
   count: number;
 }
 
+function getBaseUrl(): string {
+  return (
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+    (typeof process !== "undefined" ? process.env.VITE_API_BASE_URL : undefined) ??
+    ""
+  );
+}
+
+async function post<T>(path: string, body: unknown): Promise<T | { error: string }> {
+  try {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return {
+        error: typeof data?.error === "string" ? data.error : `요청이 실패했어요 (${res.status})`,
+      };
+    }
+
+    return data as T;
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "요청 중 문제가 발생했어요" };
+  }
+}
+
 /**
  * AI 실력 진단 요청
  *
@@ -31,8 +61,10 @@ interface GenerateProblemsRequest {
 export async function diagnose(
   req: DiagnoseRequest
 ): Promise<DiagnoseResponse | { error: string }> {
-  // TODO: Implement
-  throw new Error("Not implemented");
+  return post<DiagnoseResponse>("/diagnose", {
+    exam: req.exam,
+    answers: req.answers,
+  });
 }
 
 /**
@@ -44,6 +76,8 @@ export async function diagnose(
 export async function generateProblems(
   req: GenerateProblemsRequest
 ): Promise<GenerateResponse | { error: string }> {
-  // TODO: Implement
-  throw new Error("Not implemented");
+  return post<GenerateResponse>("/generate-problems", {
+    part: req.part,
+    count: req.count,
+  });
 }
