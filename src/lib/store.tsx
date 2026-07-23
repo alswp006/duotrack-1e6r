@@ -1,5 +1,6 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import type { AppMeta, UserProfile } from "@/lib/types";
+import { getMeta, getProfile, setMeta } from "@/lib/storage";
 
 /**
  * 앱 상태 Context (Packet 0003)
@@ -22,14 +23,49 @@ export interface AppStoreValue {
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-  // TODO: Implement — storage.getMeta()/getProfile() 로드 후 isLoading false, updateMeta는 storage.setMeta 동기 호출
-  throw new Error("Not implemented");
+  const [meta, setMetaState] = useState<AppMeta>(getMeta());
+  const [profile, setProfileState] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setMetaState(getMeta());
+      setProfileState(getProfile());
+      setIsLoading(false);
+    });
+  }, []);
+
+  const isSubscribed = meta.isSubscribed;
+
+  const canUseFeature = (feature: FeatureKey): boolean => {
+    if (isSubscribed) return true;
+    return false;
+  };
+
+  const updateMeta = (patch: Partial<AppMeta>) => {
+    setMetaState((prev) => {
+      const next = { ...prev, ...patch };
+      setMeta(next);
+      return next;
+    });
+  };
+
+  const value: AppStoreValue = {
+    meta,
+    profile,
+    isLoading,
+    isSubscribed,
+    canUseFeature,
+    updateMeta,
+  };
+
+  return React.createElement(AppStoreContext.Provider, { value }, children);
 }
 
 export function useAppStore(): AppStoreValue {
   const ctx = useContext(AppStoreContext);
   if (!ctx) {
-    throw new Error("Not implemented");
+    throw new Error("useAppStore must be used within AppStoreProvider");
   }
   return ctx;
 }
