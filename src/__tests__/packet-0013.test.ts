@@ -3,8 +3,8 @@ import React from "react";
 import { screen, waitFor, within, fireEvent } from "@testing-library/react";
 import { mockAll, mockNavigate } from "@/__tests__/__helpers__/mocks";
 import { renderWithRouter } from "@/__tests__/__helpers__/test-utils";
-import { addProblem } from "@/lib/storage";
-import type { GeneratedProblem } from "@/lib/types";
+import { addProblem, addSession } from "@/lib/storage";
+import type { GeneratedProblem, StudySession } from "@/lib/types";
 
 /**
  * TDD RED PHASE: AI 문제 생성/풀이 화면 (S8 /problems)
@@ -95,11 +95,28 @@ function buildProblem(id: string, generatedAt: string): GeneratedProblem {
   };
 }
 
+// AC-6 게이트(StudySession 5건 이상)를 통과시키기 위한 시드 — 이 파일의 시나리오는 게이트 통과 이후를 다룬다
+function seedSufficientSessions() {
+  for (let i = 0; i < 5; i++) {
+    const session: StudySession = {
+      id: `seed-session-${i}`,
+      startedAt: new Date(Date.now() - i * 1000).toISOString(),
+      durationSec: 1500,
+      focusPart: "LC_Part2",
+      completed: true,
+      problemsSolved: 0,
+      correctCount: 0,
+    };
+    addSession(session);
+  }
+}
+
 describe("AI 문제 생성/풀이 화면 (S8 /problems)", () => {
   beforeEach(() => {
     localStorage.clear();
     mockGenerateProblems.mockReset();
     mockNavigate.mockClear();
+    seedSufficientSessions();
   });
 
   afterEach(() => {

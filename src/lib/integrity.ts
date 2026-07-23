@@ -1,11 +1,13 @@
 import type { AppMeta, StudySession } from "@/lib/types";
 
 function mondayAnchor(date: Date): string {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = d.getUTCDay();
+  const day = date.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diffToMonday);
-  return d.toISOString().slice(0, 10);
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate() + diffToMonday);
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, "0");
+  const dd = d.getDate().toString().padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
 
 // F7 AC-1: 주간 카운터 리셋

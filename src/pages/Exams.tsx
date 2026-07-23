@@ -32,7 +32,7 @@ export default function Exams() {
 
   function handleSubmit() {
     const scoreNum = Number(score);
-    if (!score || scoreNum <= 0) {
+    if (!score || !Number.isFinite(scoreNum) || scoreNum <= 0) {
       setError("점수를 입력해주세요");
       return;
     }

@@ -34,9 +34,11 @@ export default function Settings() {
     const cutoff = Date.now() - SIX_MONTHS_MS;
     const sessions = getSessions();
     const kept = sessions.filter((s) => new Date(s.startedAt).getTime() >= cutoff);
-    setItem("duotrack.sessions", kept);
+    const result = setItem("duotrack.sessions", kept);
     setConfirmOpen(false);
-    setToast("오래된 기록을 정리했어요");
+    setToast(
+      result && result.ok === false ? "저장 공간이 부족해요. 앱을 재시작한 후 다시 시도해주세요" : "오래된 기록을 정리했어요",
+    );
   }
 
   return (

@@ -1,0 +1,9 @@
+{
+  "app_id": "fac_duotrack_1e6r",
+  "name": "DuoTrack",
+  "base_url_env": "FAC_DUOTRACK_1E6R_BASE_URL",
+  "profile": "experimental",
+  "level": "smoke",
+  "created_by": "factory",
+  "created_at": "2026-07-24"
+}

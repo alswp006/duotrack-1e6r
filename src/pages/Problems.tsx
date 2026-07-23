@@ -6,12 +6,14 @@ import { ScreenScaffold } from "@/components/ScreenScaffold";
 import { Card } from "@/components/Card";
 import { SubmitFooter } from "@/components/BottomCTA";
 import { generateProblems } from "@/lib/api";
-import { addProblem } from "@/lib/storage";
+import { addProblem, getSessions, recordProblemResult } from "@/lib/storage";
 import { useAppStore } from "@/lib/store";
 import { TossRewardAd } from "@/components/TossRewardAd";
 import type { GeneratedProblem, RouteState } from "@/lib/types";
 
-type Phase = "idle" | "loading" | "gate" | "success" | "error";
+const MIN_SESSIONS_REQUIRED = 5;
+
+type Phase = "idle" | "loading" | "gate" | "success" | "error" | "insufficient";
 
 function fireHapticTickWeak() {
   try {
@@ -34,6 +36,10 @@ export default function Problems() {
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   async function handleGenerate() {
+    if (getSessions().length < MIN_SESSIONS_REQUIRED) {
+      setPhase("insufficient");
+      return;
+    }
     setPhase("loading");
     const result = await generateProblems({ part, count });
 
@@ -62,7 +68,14 @@ export default function Problems() {
   }
 
   function toggleReveal(problemIndex: number) {
-    setRevealed((prev) => ({ ...prev, [problemIndex]: !prev[problemIndex] }));
+    setRevealed((prev) => {
+      const next = !prev[problemIndex];
+      if (next) {
+        const isCorrect = selected[problemIndex] === problems[problemIndex]?.answerIndex;
+        recordProblemResult(part, isCorrect);
+      }
+      return { ...prev, [problemIndex]: next };
+    });
   }
 
   return (
@@ -78,6 +91,14 @@ export default function Problems() {
         <Card testId="problems-loading">
           <Loader />
           <Paragraph.Text typography="t5">AI가 문제를 만들고 있어요</Paragraph.Text>
+        </Card>
+      )}
+
+      {phase === "insufficient" && (
+        <Card testId="problems-insufficient">
+          <Paragraph.Text typography="t4">
+            학습 데이터가 부족해요. 세션을 {MIN_SESSIONS_REQUIRED}회 이상 완료해주세요
+          </Paragraph.Text>
         </Card>
       )}
 

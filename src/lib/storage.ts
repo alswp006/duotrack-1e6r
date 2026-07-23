@@ -18,8 +18,15 @@ export function getItem<T>(key: string): T | null {
   }
 }
 
-export function setItem<T>(key: string, value: T): void {
-  localStorage.setItem(key, JSON.stringify(value));
+export function setItem<T>(key: string, value: T): StorageResult {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    if (e instanceof Error && e.name === "QuotaExceededError") {
+      return { ok: false, reason: "quota" };
+    }
+    throw new Error(`Storage error: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 export function removeItem(key: string): void {
@@ -62,6 +69,26 @@ export function addSession(session: StudySession): StorageResult {
     const existing = getSessions();
     const updated = [...existing, session];
     localStorage.setItem("duotrack.sessions", JSON.stringify(updated));
+  } catch (e) {
+    if (e instanceof Error && e.name === "QuotaExceededError") {
+      return { ok: false, reason: "quota" };
+    }
+    throw new Error(`Storage error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+// F4 AC-1/AC-5: 문제 풀이 결과를 해당 파트의 최신 세션에 반영 (취약 파트 정답률 피드백 루프)
+export function recordProblemResult(part: string, correct: boolean): StorageResult {
+  try {
+    const sessions = getSessions();
+    const index = sessions.map((s) => s.focusPart).lastIndexOf(part);
+    if (index === -1) return;
+    sessions[index] = {
+      ...sessions[index],
+      problemsSolved: sessions[index].problemsSolved + 1,
+      correctCount: sessions[index].correctCount + (correct ? 1 : 0),
+    };
+    localStorage.setItem("duotrack.sessions", JSON.stringify(sessions));
   } catch (e) {
     if (e instanceof Error && e.name === "QuotaExceededError") {
       return { ok: false, reason: "quota" };

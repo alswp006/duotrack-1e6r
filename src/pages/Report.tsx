@@ -36,7 +36,7 @@ export default function Report() {
   const latestMock = mockExams[mockExams.length - 1];
   const latestScore = latestReal?.score ?? baseline;
 
-  const hasData = sessions.length > 0 || exams.length > 0;
+  const hasData = sessions.length > 0 && exams.length > 0;
   const efficiency = totalHours > 0 ? (latestScore - baseline) / totalHours : null;
   const progressRatio =
     targetScore > baseline ? Math.min(1, Math.max(0, (latestScore - baseline) / (targetScore - baseline))) : 0;
