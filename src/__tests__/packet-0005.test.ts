@@ -310,9 +310,6 @@ describe("Packet 0005: 집계·무결성·프로모션 순수 유틸", () => {
         "@apps-in-toss/web-framework"
       );
 
-      const mockGrant = vi.fn(async () => ({ success: true }));
-      (grantPromotionReward as any) = mockGrant;
-
       const meta: AppMeta = {
         aiNoticeAcknowledged: true,
         isSubscribed: false,
@@ -324,7 +321,7 @@ describe("Packet 0005: 집계·무결성·프로모션 순수 유틸", () => {
       // amount = 10000 (초과) → 5000으로 클램프
       await grantPromo(10000, meta);
 
-      expect(mockGrant).toHaveBeenCalledWith(
+      expect(grantPromotionReward).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 5000, // 클램프됨
         })
@@ -337,9 +334,6 @@ describe("Packet 0005: 집계·무결성·프로모션 순수 유틸", () => {
         "@apps-in-toss/web-framework"
       );
 
-      const mockGrant = vi.fn(async () => ({ success: true }));
-      (grantPromotionReward as any) = mockGrant;
-
       const meta: AppMeta = {
         aiNoticeAcknowledged: true,
         isSubscribed: false,
@@ -351,7 +345,7 @@ describe("Packet 0005: 집계·무결성·프로모션 순수 유틸", () => {
       // amount = 3000 (정상 범위)
       await grantPromo(3000, meta);
 
-      expect(mockGrant).toHaveBeenCalledWith(
+      expect(grantPromotionReward).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 3000, // 그대로 전달
         })

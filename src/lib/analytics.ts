@@ -12,5 +12,22 @@ export function computeRoi(
   exams: MockExamResult[],
   profile: UserProfile
 ): RoiResult {
-  throw new Error("computeRoi not implemented");
+  const totalHours = sessions.reduce((sum, s) => sum + s.durationSec, 0) / 3600;
+
+  const latestExam = exams.reduce<MockExamResult | null>((latest, exam) => {
+    if (!latest || exam.takenAt > latest.takenAt) {
+      return exam;
+    }
+    return latest;
+  }, null);
+
+  const currentScore = latestExam ? latestExam.score : profile.currentLevel;
+  const scoreDelta = currentScore - profile.currentLevel;
+
+  const efficiency = totalHours > 0 ? scoreDelta / totalHours : "—";
+
+  const targetDelta = profile.targetScore - profile.currentLevel;
+  const progress = targetDelta !== 0 ? scoreDelta / targetDelta : 0;
+
+  return { efficiency, progress, currentScore };
 }
