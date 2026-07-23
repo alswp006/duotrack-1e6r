@@ -122,6 +122,7 @@ export type RouteState = {
   App.tsx
   __tmp_check.tsx
   __tmp_check2.tsx
+  app/
   components/
     AdSlot.tsx
     Amount.tsx
@@ -161,6 +162,9 @@ export type RouteState = {
     Settings.tsx
     Subscribe.tsx
     __TdsGallery.tsx
+  routes/
+  shared/
+    index.ts
   styles/
     globals.css
     reward-ad.css
@@ -218,3 +222,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0005: 집계·무결성·프로모션 순수 유틸 (files: src/lib/integrity.ts, src/lib/analytics.ts, src/lib/promo.ts)
 - 0008: 진단 문항 화면 (S3 /diagnose/quiz) (files: src/pages/DiagnoseQuiz.tsx)
 - 0013: AI 문제 생성/풀이 화면 (S8 /problems) (files: src/pages/Problems.tsx)
+- heal-1-01: 공유 화면 계약·스캐폴드 안정화 및 export 정합 (files: src/routes/routeState.ts, src/app/AppStateContext.tsx, src/components/ScreenScaffold.tsx, src/shared/index.ts, tsconfig.json)
