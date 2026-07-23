@@ -180,3 +180,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 엔티티 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
 - 0004: 외부 AI API 클라이언트 (files: src/lib/api.ts)
+- 0002: localStorage CRUD 헬퍼 + 손상/용량 방어 (files: src/lib/storage.ts)
