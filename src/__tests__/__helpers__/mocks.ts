@@ -172,6 +172,13 @@ export function mockTds() {
         children,
       ),
 
+    ChipItem: ({ children, selected, onClick }: any) =>
+      React.createElement(
+        "button",
+        { role: "button", "aria-pressed": selected, onClick },
+        children,
+      ),
+
     Switch: ({ checked, onChange }: any) =>
       React.createElement("input", { type: "checkbox", checked, onChange, role: "switch" }),
   }));

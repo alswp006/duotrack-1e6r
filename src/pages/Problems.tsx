@@ -8,9 +8,10 @@ import { SubmitFooter } from "@/components/BottomCTA";
 import { generateProblems } from "@/lib/api";
 import { addProblem } from "@/lib/storage";
 import { useAppStore } from "@/lib/store";
+import { TossRewardAd } from "@/components/TossRewardAd";
 import type { GeneratedProblem, RouteState } from "@/lib/types";
 
-type Phase = "idle" | "loading" | "success" | "error";
+type Phase = "idle" | "loading" | "gate" | "success" | "error";
 
 function fireHapticTickWeak() {
   try {
@@ -51,7 +52,8 @@ export default function Problems() {
     setProblems(withTimestamps);
     setSelected({});
     setRevealed({});
-    setPhase("success");
+    // F4 AC-2: 결과 보기 전 보상형 광고 게이트 — 저장은 즉시, 노출만 광고 시청 후.
+    setPhase("gate");
   }
 
   function selectChoice(problemIndex: number, choiceIndex: number) {
@@ -87,6 +89,12 @@ export default function Problems() {
             다시 시도
           </Button>
         </Card>
+      )}
+
+      {phase === "gate" && (
+        <TossRewardAd slotId="problems-result" onReward={() => setPhase("success")}>
+          {null}
+        </TossRewardAd>
       )}
 
       {phase === "success" && (

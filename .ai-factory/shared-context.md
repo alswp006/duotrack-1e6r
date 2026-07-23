@@ -120,6 +120,8 @@ export type RouteState = {
 ## Existing Codebase (import and use these — do NOT recreate)
 ### File Tree (src/)
   App.tsx
+  __tmp_check.tsx
+  __tmp_check2.tsx
   components/
     AdSlot.tsx
     Amount.tsx
@@ -137,13 +139,27 @@ export type RouteState = {
     TossRewardAd.tsx
   hooks/
   lib/
+    analytics.ts
     api.ts
+    integrity.ts
+    promo.ts
     storage.ts
+    store.tsx
     types.ts
     utils.ts
   main.tsx
   pages/
+    DiagnoseQuiz.tsx
+    DiagnoseResult.tsx
+    DiagnoseSetup.tsx
+    Exams.tsx
     Home.tsx
+    Onboarding.tsx
+    Problems.tsx
+    Report.tsx
+    Session.tsx
+    Settings.tsx
+    Subscribe.tsx
     __TdsGallery.tsx
   styles/
     globals.css
@@ -152,7 +168,10 @@ export type RouteState = {
   vite-env.d.ts
 
 ### Exports (src/lib/)
+- analytics.ts: export function computeRoi( sessions: StudySession[], exams: MockExamResult[], profile: UserProfile ): RoiResult
 - api.ts: export async function diagnose( req: DiagnoseRequest ): Promise<DiagnoseResponse |; export async function generateProblems( req: GenerateProblemsRequest ): Promise<GenerateResponse |
+- integrity.ts: export function maybeResetWeek(meta: AppMeta, now: Date): AppMeta; export function computeWeakParts(sessions: StudySession[]): string[] | null
+- promo.ts: export async function grantPromo( amount: number, meta: AppMeta ): Promise<PromoResult>
 - storage.ts: export function getItem<T>(key: string): T | null; export function setItem<T>(key: string, value: T): void; export function removeItem(key: string): void; export function getProfile(): UserProfile | null; export function setProfile(profile: UserProfile): StorageResult; export function getSessions(): StudySession[]; export function addSession(session: StudySession): StorageResult; export function getExams(): MockExamResult[]
 - types.ts: export type TargetExam = "TOEIC" | "OPIC" | "TEPS"; export type ExamType = "MOCK" | "REAL"; export interface UserProfile; export interface StudySession; export interface MockExamResult; export interface GeneratedProblem; export interface AppMeta; export interface DiagnoseRequest
 - utils.ts: export function cn(...classes: (string | boolean | undefined | null)[]): string; export function formatNumber(n: number): string; export function formatCurrency(n: number, currency = 'KRW'): string
@@ -174,13 +193,28 @@ export type RouteState = {
 - TossRewardAd.tsx: TossRewardAd
 
 ### Module Dependencies (import graph)
+  lib/analytics.ts → imports: lib/types
   lib/api.ts → imports: lib/types
+  lib/integrity.ts → imports: lib/types
+  lib/promo.ts → imports: lib/types
+  pages/DiagnoseQuiz.tsx → imports: components/ScreenScaffold, components/Card, components/BottomCTA, components/TossRewardAd, lib/api, lib/storage, lib/types
+  pages/DiagnoseResult.tsx → imports: components/ScreenScaffold, components/Card, components/SummaryHero, components/BottomCTA, components/CountUp, lib/types
+  pages/DiagnoseSetup.tsx → imports: components/ScreenScaffold, components/Card, components/BottomCTA, lib/store, lib/types
+  pages/Exams.tsx → imports: components/ScreenScaffold, components/Card, components/BottomCTA, components/StateView, lib/store, lib/storage, lib/types
+  pages/Home.tsx → imports: components/ScreenScaffold, components/SummaryHero, components/Card, components/Amount, components/FloatingTabBar, lib/store, lib/storage, lib/integrity, lib/types
+  pages/Onboarding.tsx → imports: components/ScreenScaffold, components/Card, components/BottomCTA, lib/store
+  pages/Problems.tsx → imports: components/ScreenScaffold, components/Card, components/BottomCTA, lib/api, lib/storage, lib/store, components/TossRewardAd, lib/types
+  pages/Report.tsx → imports: components/ScreenScaffold, components/Card, components/SummaryHero, components/CountUp, components/MiniBar, components/Sparkline, components/StateView, lib/store, lib/storage
+  pages/Session.tsx → imports: components/ScreenScaffold, components/Card, components/BottomCTA, components/MiniBar, lib/store, lib/storage, lib/types
+  pages/Settings.tsx → imports: components/ScreenScaffold, components/Card, lib/store, lib/storage
+  pages/Subscribe.tsx → imports: components/ScreenScaffold, components/Card, components/TossPurchase, lib/store
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
 
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 엔티티 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
-- 0004: 외부 AI API 클라이언트 (files: src/lib/api.ts)
 - 0002: localStorage CRUD 헬퍼 + 손상/용량 방어 (files: src/lib/storage.ts)
 - 0003: 앱 상태 Context + 로딩 + 구독 게이트 (files: src/lib/store.tsx)
+- 0004: 외부 AI API 클라이언트 (files: src/lib/api.ts)
 - 0005: 집계·무결성·프로모션 순수 유틸 (files: src/lib/integrity.ts, src/lib/analytics.ts, src/lib/promo.ts)
 - 0008: 진단 문항 화면 (S3 /diagnose/quiz) (files: src/pages/DiagnoseQuiz.tsx)
+- 0013: AI 문제 생성/풀이 화면 (S8 /problems) (files: src/pages/Problems.tsx)
