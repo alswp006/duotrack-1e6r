@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { AppMeta, UserProfile } from "@/lib/types";
-import { getMeta, getProfile, setMeta } from "@/lib/storage";
+import { getMeta, getProfile, setMeta, setProfile } from "@/lib/storage";
 
 /**
  * 앱 상태 Context (Packet 0003)
@@ -18,6 +18,7 @@ export interface AppStoreValue {
   isSubscribed: boolean;
   canUseFeature: (feature: FeatureKey) => boolean;
   updateMeta: (patch: Partial<AppMeta>) => void;
+  updateProfile: (patch: Partial<UserProfile>) => void;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -50,6 +51,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
     });
   };
 
+  const updateProfile = (patch: Partial<UserProfile>) => {
+    setProfileState((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      setProfile(next);
+      return next;
+    });
+  };
+
   const value: AppStoreValue = {
     meta,
     profile,
@@ -57,6 +67,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
     isSubscribed,
     canUseFeature,
     updateMeta,
+    updateProfile,
   };
 
   return React.createElement(AppStoreContext.Provider, { value }, children);

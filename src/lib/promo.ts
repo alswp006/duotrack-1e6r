@@ -6,8 +6,6 @@ interface PromoResult {
   message?: string;
 }
 
-type PromoMeta = AppMeta & { promoGrantedAt?: string };
-
 const PROMOTION_CODE = "DUOTRACK_SIGNUP";
 const PROMO_AMOUNT_LIMIT = 5000;
 
@@ -16,7 +14,7 @@ export async function grantPromo(
   amount: number,
   meta: AppMeta
 ): Promise<PromoResult> {
-  if ((meta as PromoMeta).promoGrantedAt) {
+  if (meta.promoGrantedAt) {
     return { granted: false, message: "이미 리워드를 받으셨어요" };
   }
 

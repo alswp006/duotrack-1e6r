@@ -8,7 +8,7 @@ import { Amount } from "@/components/Amount";
 import { FloatingTabBar } from "@/components/FloatingTabBar";
 import { useAppStore } from "@/lib/store";
 import { getSessions } from "@/lib/storage";
-import { maybeResetWeek } from "@/lib/integrity";
+import { maybeResetWeek, computeWeakParts } from "@/lib/integrity";
 import type { StudySession } from "@/lib/types";
 
 const TABS = [
@@ -24,7 +24,7 @@ const TABS = [
  */
 export default function Home() {
   const navigate = useNavigate();
-  const { meta, profile, isLoading, updateMeta, isSubscribed } = useAppStore();
+  const { meta, profile, isLoading, updateMeta, updateProfile, isSubscribed } = useAppStore();
   const [sessions, setSessions] = useState<StudySession[]>([]);
 
   useEffect(() => {
@@ -33,7 +33,16 @@ export default function Home() {
     if (resetMeta.weekAnchor !== meta.weekAnchor) {
       updateMeta({ weeklyFreeSessionsUsed: resetMeta.weeklyFreeSessionsUsed, weekAnchor: resetMeta.weekAnchor });
     }
-    setSessions(getSessions());
+    const loadedSessions = getSessions();
+    setSessions(loadedSessions);
+
+    // F4 AC-1: 취약 파트 자동 계산 — 세션 5건 이상이면 최저 정답률 파트를 weakParts[0]로 갱신
+    if (profile) {
+      const weakParts = computeWeakParts(loadedSessions);
+      if (weakParts && weakParts[0] !== profile.weakParts[0]) {
+        updateProfile({ weakParts });
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 

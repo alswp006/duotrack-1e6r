@@ -53,6 +53,7 @@ export interface AppMeta {
   weeklyFreeSessionsUsed: number;
   weekAnchor: string;
   onboarded: boolean;
+  promoGrantedAt?: string; // F6 AC-6: 프로모션 중복 지급 방지 플래그
 }
 
 // DiagnoseRequest — AI 실력 진단 요청
