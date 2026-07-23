@@ -1,0 +1,673 @@
+[
+  {
+    "id": "0001",
+    "title": "엔티티 타입 + RouteState 계약 정의",
+    "epic": "Epic 1. Types",
+    "task": {
+      "description": "SPEC의 5개 데이터 모델(UserProfile, StudySession, MockExamResult, GeneratedProblem, AppMeta)과 외부 AI API 요청/응답 타입(DiagnoseRequest/Response, GenerateRequest/Response), 페이지 간 데이터 계약 RouteState를 순수 타입 파일로 정의한다. 런타임 코드는 전혀 없으며 유니온 타입(TargetExam 등)을 분리 export 한다. RouteState는 앱의 11개 라우트 전부를 키로 포함해야 한다.",
+      "acceptance_criteria": [
+        "5개 entity interface + 4개 API interface + TargetExam 유니온이 모두 export 됨",
+        "RouteState에 '/','/diagnose','/diagnose/quiz','/diagnose/result','/home','/session','/exams','/problems','/report','/subscribe','/settings' 11개 키 모두 존재",
+        "tsc --noEmit 통과, 런타임 코드 0줄"
+      ]
+    },
+    "covers": [
+      "데이터 모델·RouteState 계약 — 전 기능 기반"
+    ],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "11개 라우트 키가 4.1 라우터와 1:1 일치하도록 RouteState 정의",
+      "/diagnose/quiz는 {targetExam,targetScore}, /diagnose/result는 {profile:UserProfile} 상태 타입 명시",
+      "import 시 타입 에러 0"
+    ],
+    "depends_on": [],
+    "db_schema": "interface UserProfile{targetExam:TargetExam;targetScore:number;currentLevel:number;diagnosedAt:string;weakParts:string[];createdAt:string} → key 'duotrack.profile'; StudySession[] → 'duotrack.sessions'; MockExamResult[] → 'duotrack.exams'; GeneratedProblem[] → 'duotrack.problems'; AppMeta → 'duotrack.meta'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "localStorage CRUD 헬퍼 + 손상/용량 방어",
+    "epic": "Epic 2. Data Layer",
+    "task": {
+      "description": "5개 key(duotrack.profile/sessions/exams/problems/meta)에 대한 read/write/add CRUD 함수를 작성한다. JSON 파싱 실패 시 기본값으로 복구하고, addProblem은 100건 상한을 유지하며 오래된 항목부터 제거한다. setX는 QuotaExceededError를 캐치해 크래시 없이 실패 결과를 반환한다. 순수 데이터 접근 레이어로 UI 의존성 없음.",
+      "acceptance_criteria": [
+        "getX/setX/addX 함수가 key별로 존재하고 tsc --noEmit 통과",
+        "addProblem 호출 시 저장된 문제가 100건 초과하면 오래된 항목부터 제거되어 100건 유지",
+        "JSON.parse 실패 시 throw 없이 기본값 반환, QuotaExceededError 시 {ok:false,reason:'quota'} 반환"
+      ]
+    },
+    "covers": [
+      "F7-AC2",
+      "F7-AC3",
+      "F2-AC8"
+    ],
+    "files": [
+      "src/lib/storage.ts"
+    ],
+    "definition_of_done": [
+      "5개 key 전부 get/set 지원, sessions/exams/problems는 add 함수 제공",
+      "손상 JSON 진입 시 해당 key 기본값 초기화 후 반환(throw 없음)",
+      "QuotaExceededError 캐치로 앱 크래시 없음"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "keys: duotrack.profile(object), duotrack.sessions(StudySession[]), duotrack.exams(MockExamResult[]), duotrack.problems(GeneratedProblem[] 최근100), duotrack.meta(AppMeta)",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "앱 상태 Context + 로딩 + 구독 게이트",
+    "epic": "Epic 2. Data Layer",
+    "task": {
+      "description": "전역 상태를 관리하는 경량 Context(AppStoreProvider + useAppStore 훅)를 만든다. 마운트 시 storage에서 meta/profile을 로드하며 isLoading true→false 전환, isSubscribed 기반 유료 게이트 파생값 canUseFeature, meta 갱신 액션을 제공한다. storage.setMeta 동기 반영을 포함한다.",
+      "acceptance_criteria": [
+        "useAppStore()가 {meta,profile,isLoading,isSubscribed,canUseFeature} 반환",
+        "isSubscribed===true면 canUseFeature('mock'|'report'|'unlimitedSession') 모두 true",
+        "meta 갱신 액션 호출 시 storage.setMeta 동기 반영 후 상태 업데이트"
+      ]
+    },
+    "covers": [
+      "F6-AC2",
+      "F7-AC4"
+    ],
+    "files": [
+      "src/lib/store.tsx"
+    ],
+    "definition_of_done": [
+      "Provider 마운트 시 meta/profile 로드하고 isLoading 전환",
+      "canUseFeature가 구독/무료 상태에 따라 정확히 분기",
+      "meta 갱신 시 localStorage와 상태 동기화"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "AppMeta{aiNoticeAcknowledged,isSubscribed,weeklyFreeSessionsUsed,weekAnchor,onboarded} → 'duotrack.meta'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "외부 AI API 클라이언트",
+    "epic": "Epic 2. Data Layer",
+    "task": {
+      "description": "Railway 서버의 POST /diagnose, POST /generate-problems를 호출하는 fetch 래퍼를 작성한다. 성공은 응답 타입으로, 실패는 {error:string}로 정규화 반환하며 500/네트워크 예외를 캐치해 throw하지 않는다. base URL은 import.meta.env.VITE_API_BASE_URL에서 주입한다.",
+      "acceptance_criteria": [
+        "diagnose(req)가 성공 시 DiagnoseResponse, 실패 시 {error:string} 반환(throw 없음)",
+        "generateProblems(req)가 GenerateResponse 또는 {error} 반환",
+        "500/네트워크 예외를 캐치해 {error:'...'}로 정규화, base URL은 env에서 주입"
+      ]
+    },
+    "covers": [
+      "F1-AC6",
+      "F4-AC7"
+    ],
+    "files": [
+      "src/lib/api.ts"
+    ],
+    "definition_of_done": [
+      "두 함수 모두 예외를 삼키고 정규화된 결과 반환",
+      "VITE_API_BASE_URL 미설정 시에도 크래시 없이 error 반환",
+      "tsc --noEmit 통과"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "POST /diagnose {answers:DiagnoseAnswer[],exam:string} → {currentLevel:number,weakParts:string[],path:string[]} | {error:string}; POST /generate-problems {part:string,count:number} → {problems:GeneratedProblem[]} | {error:string}",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0005",
+    "title": "집계·무결성·프로모션 순수 유틸",
+    "epic": "Epic 2. Data Layer",
+    "task": {
+      "description": "주간 카운터 월요일 리셋(now 주입 순수함수), 용량 임계 계산, 취약 파트 자동 계산, ROI 지표(0시간 방어), 프로모션 리워드 지급(클램프·중복방지) 유틸을 작성한다. 모두 순수 함수 또는 얇은 래퍼로 격리하여 페이지가 방어된 값만 소비하게 한다.",
+      "acceptance_criteria": [
+        "maybeResetWeek(meta,now)가 지난 주 앵커면 weeklyFreeSessionsUsed=0 및 앵커 갱신, 같은 주 재호출 시 idempotent",
+        "computeRoi 총 학습시간 0이면 efficiency '—' 반환(NaN/Infinity 없음), computeWeakParts는 세션 5건 미만이면 null",
+        "grantPromo가 amount를 min(3000,5000)으로 클램프해 grantPromotionReward 호출, 이미 지급 시 {granted:false}"
+      ]
+    },
+    "covers": [
+      "F7-AC1",
+      "F7-AC5",
+      "F4-AC1",
+      "F5-AC7",
+      "F6-AC5",
+      "F6-AC6"
+    ],
+    "files": [
+      "src/lib/integrity.ts",
+      "src/lib/analytics.ts",
+      "src/lib/promo.ts"
+    ],
+    "definition_of_done": [
+      "리셋/용량 함수는 now 주입 순수함수로 테스트 가능",
+      "ROI·취약파트 나눗셈 방어를 계산 레이어에 격리",
+      "grantPromo는 @apps-in-toss/web-framework의 grantPromotionReward 사용"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0006",
+    "title": "온보딩 화면 (S1 /)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "앱 소개 + 최초 진입 화면. meta 로드 중 Spinner를 표시하고, onboarded===true면 즉시 /home으로 리다이렉트, 아니면 소개를 노출한다. 하단 고정 '시작하기' 버튼으로 /diagnose 이동. ScreenScaffold + Top + Paragraph.Text 골격을 사용한다.",
+      "acceptance_criteria": [
+        "meta 로드 중 TDS Spinner 표시",
+        "onboarded===true 시 즉시 /home 리다이렉트",
+        "display='block' '시작하기' 버튼(48px) 탭 시 navigate('/diagnose')"
+      ]
+    },
+    "covers": [
+      "S1 골격 — 앱 인입 경로"
+    ],
+    "files": [
+      "src/pages/Onboarding.tsx"
+    ],
+    "definition_of_done": [
+      "ScreenScaffold(PageShell) 골격, raw div 골격 금지",
+      "버튼 CTA에 generateHapticFeedback({type:'success'}) 적용",
+      "useAppStore로 meta 로드/onboarded 확인"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "PageShell + FixedBottomCTA. TDS: Top, Paragraph.Text, Spacing, Button. Layout: <Top title='DuoTrack'/> + 소개 Paragraph + Spacing(size=16) + 하단 display='block' size='large' Button '시작하기'. States: Loading=Spinner, onboarded시 /home 리다이렉트. Interaction: '시작하기'→success 햅틱 후 /diagnose."
+  },
+  {
+    "id": "0007",
+    "title": "진단 설정 화면 (S2 /diagnose)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "시험 선택 Chip(TOEIC/OPIC/TEPS) + 목표 점수 TextField + AI 고지 AlertDialog(1회) 화면. aiNoticeAcknowledged===false면 진입 시 고지 1회 표시하고 확인 시 meta 저장. 점수 범위(TOEIC 10~990) 검증 후 통과 시 RouteState 상태와 함께 quiz로 이동한다.",
+      "acceptance_criteria": [
+        "aiNoticeAcknowledged===false 진입 시 '이 서비스는 생성형 AI를 활용합니다' AlertDialog 1회, 확인 시 meta.aiNoticeAcknowledged=true 저장",
+        "TOEIC에서 targetScore>990 또는 <10 시 '목표 점수는 10~990 사이여야 해요' 에러, 진행 차단",
+        "'진단 시작하기' 통과 시 navigate('/diagnose/quiz',{state:{targetExam,targetScore}})"
+      ]
+    },
+    "covers": [
+      "F1-AC1",
+      "F1-AC2",
+      "F1-AC5"
+    ],
+    "files": [
+      "src/pages/Diagnose.tsx"
+    ],
+    "definition_of_done": [
+      "Chip 각 44px, TextField inputMode='numeric' hasError/help 사용",
+      "state를 RouteState['/diagnose/quiz']로 캐스팅해 전달",
+      "Chip 탭에 tickWeak 햅틱"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "PageShell + FixedBottomCTA. TDS: Top, Paragraph, Chip, TextField, Spacing, Button, AlertDialog, Toast. Layout: <Top title='목표 설정'/> + '어떤 시험을 준비하나요?' + flex row Chip(TOEIC filled selected / OPIC / TEPS outlined) + Spacing(24) + TextField variant='box' label='목표 점수' inputMode='numeric' hasError help='목표 점수는 10~990 사이여야 해요' + display='block' size='large' Button '진단 시작하기' + AlertDialog open={!aiAcknowledged} title='AI 활용 안내' description='이 서비스는 생성형 AI를 활용해 실력을 진단해요. 결과는 참고용이에요.' 확인 버튼. Interaction: Chip 탭→tickWeak, 검증 실패시 hasError=true, 최초 진입 AI 고지 1회."
+  },
+  {
+    "id": "0008",
+    "title": "진단 문항 화면 (S3 /diagnose/quiz)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "10문항 응답 → 보상형 광고 게이트 → diagnose API 호출 → 결과 이동. location.state를 RouteState로 캐스팅한다. 미응답 존재 시 토스트로 차단하고 API 미호출, 대기 중 Spinner, 에러 시 재시도 버튼을 노출하며 성공 시 profile을 저장 후 결과 화면으로 이동한다.",
+      "acceptance_criteria": [
+        "10문항 중 미응답 존재 시 '모든 문항에 답해주세요' 토스트, API 미호출",
+        "'진단 결과 보기'→TossRewardAd 시청 완료 후 diagnose() 호출, 대기 중 Spinner+'AI가 실력을 분석하고 있어요' 및 버튼 비활성",
+        "API 에러 시 '진단에 실패했어요. 다시 시도해주세요'+'다시 시도' 버튼(크래시 없음), 성공 시 duotrack.profile 저장 후 navigate('/diagnose/result',{state:{profile}})"
+      ]
+    },
+    "covers": [
+      "F1-AC3",
+      "F1-AC6",
+      "F1-AC7",
+      "F1-AC8"
+    ],
+    "files": [
+      "src/pages/DiagnoseQuiz.tsx"
+    ],
+    "definition_of_done": [
+      "location.state를 RouteState['/diagnose/quiz']로 캐스팅",
+      "TossRewardAd 게이트 통과 후에만 API 호출",
+      "성공 시 storage로 profile 저장 후 결과 화면 이동"
+    ],
+    "depends_on": [
+      "0002",
+      "0004"
+    ],
+    "db_schema": "UserProfile → 'duotrack.profile'",
+    "api_contract": "POST /diagnose {answers,exam} → {currentLevel,weakParts,path} | {error}",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "PageShell + InteractiveGrid. TDS: Top, Paragraph, Badge, ListRow, Spacing, Button, Toast, TossRewardAd. Layout: <Top title='실력 진단' right={<Badge>{answered}/10</Badge>}/> + Paragraph.Text(t3) 문항 + choices.map ListRow(1RowTypeA) right=선택시 Chip '선택' onClick=select + display='block' size='large' Button '진단 결과 보기' + Toast. States: Loading=ListRow Skeleton 4개, Error=문항 로드 실패 재시도. Interaction: 선택 ListRow 탭→tickWeak+Badge 갱신, 제출 시 미응답이면 Toast 후 차단, 완료 시 TossRewardAd 게이트."
+  },
+  {
+    "id": "0009",
+    "title": "진단 결과 화면 (S4 /diagnose/result) + 프로모션",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "currentLevel SummaryHero + 취약 파트 Chip + AI 결과 배지를 표시한다. location.state 누락 시 /home 리다이렉트. 마운트 시 grantPromo를 호출(클램프 3000, 미지급 시에만)하고 지급/이미지급 토스트를 노출한다. '홈으로' 버튼으로 /home 이동.",
+      "acceptance_criteria": [
+        "location.state를 RouteState['/diagnose/result']로 캐스팅, 누락 시 /home 리다이렉트",
+        "data-testid='ai-badge' 'AI가 생성한 결과입니다' 배지 + SummaryHero(CountUp) 표시",
+        "마운트 시 grantPromo() 1회 호출 후 지급 결과 토스트, '홈으로'(48px)→navigate('/home')"
+      ]
+    },
+    "covers": [
+      "F1-AC4",
+      "F6-AC4"
+    ],
+    "files": [
+      "src/pages/DiagnoseResult.tsx"
+    ],
+    "definition_of_done": [
+      "AI 배지 필수 노출(모든 AI 결과물 규정)",
+      "grantPromo는 중복지급 방지·클램프 유틸 사용",
+      "state 누락 방어 리다이렉트"
+    ],
+    "depends_on": [
+      "0005"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "StatusPanel(Hero + AI 라벨). TDS: Top, SummaryHero, Amount, Paragraph, Chip, Spacing, ListRow, Button. Layout: <Top title='진단 결과'/> + AI 배지 div(inline-flex, padding 4px 8px, var(--tds-color-grey50), Paragraph.Text st13 color='tertiary' 'AI가 생성한 결과입니다', data-testid='ai-badge') + Spacing(12) + SummaryHero(data-testid='diagnose-hero') label='예상 현재 실력' value=Amount + 취약파트 Chip 나열 + display='block' Button '홈으로'. HEX 하드코딩 금지, var(--tds-color-*) 사용."
+  },
+  {
+    "id": "0010",
+    "title": "홈 대시보드 (S5 /home)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "진척도 요약 SummaryHero + 이번 주 학습 ListRow + 각 기능 진입 CTA를 제공하는 대시보드 허브. 로딩 스켈레톤, 진단 전 빈 상태, 콘텐츠 하단 비겹침 배너를 배치한다. 세션/리포트/문제/점수 각 화면으로 이동하는 CTA를 둔다.",
+      "acceptance_criteria": [
+        "data-testid='home-summary' SummaryHero/Card 1개 표시",
+        "로딩 시 스켈레톤, 진단 전이면 EmptyState '먼저 실력을 진단해볼까요?' + 진단 시작 버튼(→/diagnose)",
+        "CTA: 세션→/session, 리포트→/report, 문제생성→/problems, 점수입력→/exams (각 48px)"
+      ]
+    },
+    "covers": [
+      "S5 골격 — 대시보드 진입 허브"
+    ],
+    "files": [
+      "src/pages/Home.tsx"
+    ],
+    "definition_of_done": [
+      "AdSlot을 콘텐츠 하단에 비겹침 배치",
+      "학습 시작 CTA에 success 햅틱",
+      "useAppStore로 로딩/프로필 분기"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "PageShell + StatusPanel(Hero Summary). TDS: Top, SummaryHero, Amount, Paragraph, Spacing, ListRow, Chip, Button, Border, AdSlot. Layout: <Top title='DuoTrack' right={<Chip label='TOEIC 800' variant='outlined'/>}/> + SummaryHero label='현재 실력' value=Amount(620,'점',t1) caption='목표 800점까지 180점 남았어요' + Spacing(16) + '이번 주 학습' + ListRow(2RowTypeA '집중 세션' '2/3회 완료') right Chip '무료' + ListRow '취약 파트' 'LC Part2' onClick=goProblems + Button fill large display='block' '학습 시작하기'. States: Loading=Skeleton 카드1+ListRow2, Empty=진단 전 EmptyState '먼저 실력을 진단해볼까요?' weak Button→/diagnose, Error=danger Paragraph+재시도. Interaction: 학습 시작→success 햅틱 후 /session, 탭 전환→tickWeak."
+  },
+  {
+    "id": "0011",
+    "title": "학습 세션 타이머 + 저장·한도 게이트 (S6 /session)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "25분 포모도로 타이머 화면. 세션 중 광고 컴포넌트를 절대 렌더하지 않고, 원형 인디케이터를 1초 간격 갱신한다. 무료 한도(3회) 초과 시 BottomSheet 게이트로 차단하고, 완주 시 StudySession 저장 및 주간 카운터 증가, 중도 이탈은 미완주로 저장한다.",
+      "acceptance_criteria": [
+        "세션 진행 중 화면에 AdSlot/TossRewardAd 컴포넌트 렌더 0개(DOM 광고 요소 0)",
+        "무료·weeklyFreeSessionsUsed===3 시 '세션 시작' 탭→BottomSheet '이번 주 무료 세션을 모두 사용했어요. 구독하면 무제한이에요'+구독 버튼, 시작 차단",
+        "완주 시 {durationSec:1500,completed:true} 저장+'25분 집중 완료!' 토스트+weeklyFreeSessionsUsed 1증가, 중도 '그만두기' 확인 시 {completed:false} 저장·한도 미차감"
+      ]
+    },
+    "covers": [
+      "F2-AC1",
+      "F2-AC2",
+      "F2-AC3",
+      "F2-AC4",
+      "F2-AC5",
+      "F2-AC6",
+      "F2-AC7",
+      "F2-AC8"
+    ],
+    "files": [
+      "src/pages/Session.tsx"
+    ],
+    "definition_of_done": [
+      "광고 컴포넌트 import/렌더 없음(핵심 가치)",
+      "타이머 1초 갱신, mm:ss + 원형 인디케이터",
+      "QuotaExceededError 시 '저장 공간이 부족해요...' 토스트로 크래시 없음"
+    ],
+    "depends_on": [
+      "0003",
+      "0005"
+    ],
+    "db_schema": "StudySession → 'duotrack.sessions'; AppMeta.weeklyFreeSessionsUsed 갱신",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "PageShell + Timer 중심. TDS: Top, Paragraph, Spacing, Button, BottomSheet, Toast. Layout: <Top title='집중 세션'/> + 중앙 원형 진행 인디케이터(mm:ss, CSS flex/원형만 커스텀 허용) + Button '세션 시작'/'그만두기'. 한도 초과 시 BottomSheet 게이트+구독 버튼. States: 진행중=인디케이터 1초 갱신 광고 0개, 완주=성공 토스트, 이탈=미완주 저장. Interaction: 시작 success 햅틱. 광고 컴포넌트 절대 렌더 금지."
+  },
+  {
+    "id": "0012",
+    "title": "점수 입력/목록 화면 (S7 /exams)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "모의/실제 시험 점수를 파트별로 입력·저장하고 목록으로 보여준다. 파트 점수 합과 총점 일치 검증, 빈 점수 거부를 포함한다. 모의시험 시작은 구독 게이트(isSubscribed===false 시 BottomSheet 차단). 저장된 결과 0건이면 빈 상태를 노출한다.",
+      "acceptance_criteria": [
+        "{type:'REAL',exam:'TOEIC',score:780,partScores:{LC:400,RC:380}} 제출 시 duotrack.exams 저장+'점수가 기록됐어요' 토스트, 목록 추가",
+        "partScores 합≠score(예 700≠780) 시 '파트 점수 합이 총점과 일치하지 않아요' 에러 및 저장 차단, score 빈값/0 이하 시 '점수를 입력해주세요' 에러",
+        "isSubscribed===false에서 '모의시험 시작' 탭 시 BottomSheet '모의시험은 구독 전용 기능이에요'+구독 버튼, 시작 차단"
+      ]
+    },
+    "covers": [
+      "F3-AC1",
+      "F3-AC2",
+      "F3-AC3",
+      "F3-AC4",
+      "F3-AC5"
+    ],
+    "files": [
+      "src/pages/Exams.tsx"
+    ],
+    "definition_of_done": [
+      "TextField 검증 에러 상태로 합계·빈값 차단",
+      "0건 시 EmptyState + 입력 CTA",
+      "구독 게이트는 canUseFeature('mock') 사용"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "MockExamResult → 'duotrack.exams'",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "PageShell. TDS: Top, ListRow, TextField, Chip, Spacing, Button, BottomSheet, Toast. Layout: <Top title='점수'/> + 저장 목록 ListRow(2RowTypeA 시험명/점수) + 입력 폼(TextField 총점 inputMode='numeric', LC/RC 파트 TextField, type Chip MOCK/REAL) + display='block' Button '저장'/'모의시험 시작'. States: 목록 0건 EmptyState '아직 기록한 점수가 없어요' CTA, 검증 실패 hasError+help. Interaction: 저장 success 햅틱, 모의시험 구독 게이트 BottomSheet."
+  },
+  {
+    "id": "0013",
+    "title": "AI 문제 생성/풀이 화면 (S8 /problems)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "취약 파트 기반 AI 문제를 generate-problems API로 생성해 4지선다로 풀이한다. 결과에는 AI 결과물 배지를 표시하고, 생성 문제는 최근 100건만 storage에 유지한다. 로딩 Spinner와 API 에러 재시도를 처리한다.",
+      "acceptance_criteria": [
+        "'문제 생성'→generateProblems() 호출, 대기 중 Spinner 표시",
+        "생성 결과 화면에 data-testid='ai-badge' 'AI가 생성한 결과입니다' 배지 표시",
+        "생성 문제 저장 시 100건 초과분은 addProblem이 오래된 것부터 제거, API 에러 시 재시도 버튼(크래시 없음)"
+      ]
+    },
+    "covers": [
+      "F4-AC1",
+      "F4-AC7"
+    ],
+    "files": [
+      "src/pages/Problems.tsx"
+    ],
+    "definition_of_done": [
+      "4지선다 ListRow 선택·정답/해설 표시",
+      "AI 배지 필수, addProblem 상한 유지",
+      "location.state RouteState['/problems'] 캐스팅(mode)"
+    ],
+    "depends_on": [
+      "0002",
+      "0004"
+    ],
+    "db_schema": "GeneratedProblem → 'duotrack.problems' (최근 100건)",
+    "api_contract": "POST /generate-problems {part,count} → {problems:GeneratedProblem[]} | {error}",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "PageShell + InteractiveGrid. TDS: Top, Paragraph, ListRow, Chip, Spacing, Button, Toast. Layout: <Top title='취약 파트 문제'/> + AI 배지 div(data-testid='ai-badge' 'AI가 생성한 결과입니다', var(--tds-color-grey50)) + 문항 Paragraph + choices ListRow(1RowTypeA) right 선택 Chip + '해설 보기'/'다음 문제' Button. States: Loading=Spinner, Error=재시도 Button. Interaction: 선택 tickWeak, 정답 후 해설 노출."
+  },
+  {
+    "id": "0014",
+    "title": "ROI 리포트 화면 (S9 /report)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "시간당 점수 향상 효율/진척도/예측정확도를 computeRoi로 계산해 SummaryHero와 지표 카드로 보여준다. AI 결과물이므로 배지를 표시하고, 리포트는 구독 게이트(canUseFeature('report'))로 접근 제한한다. 총 학습시간 0이면 '—' 방어값을 렌더한다.",
+      "acceptance_criteria": [
+        "computeRoi 결과를 SummaryHero+지표 카드로 표시, 총 학습시간 0이면 efficiency '—'(NaN/Infinity 미표시)",
+        "data-testid='ai-badge' 'AI가 생성한 결과입니다' 배지 표시",
+        "isSubscribed===false 접근 시 구독 유도 BottomSheet/화면으로 차단"
+      ]
+    },
+    "covers": [
+      "F5-AC7",
+      "F6-AC4"
+    ],
+    "files": [
+      "src/pages/Report.tsx"
+    ],
+    "definition_of_done": [
+      "AI 배지 필수(모든 AI 결과물 규정)",
+      "방어된 값만 소비(analytics 유틸)",
+      "콘텐츠 하단 AdSlot 배너 비겹침 배치"
+    ],
+    "depends_on": [
+      "0003",
+      "0005"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "PageShell + StatusPanel. TDS: Top, SummaryHero, Amount, Paragraph, ListRow, Spacing, Button, AdSlot, BottomSheet. Layout: <Top title='ROI 리포트'/> + AI 배지 div(data-testid='ai-badge') + SummaryHero label='시간당 효율' value=Amount + 지표 ListRow(진척도/예측정확도) + AdSlot 하단. States: 구독 아님=구독 유도 BottomSheet, 0시간='—' 표시. var(--tds-color-*)만 사용."
+  },
+  {
+    "id": "0015",
+    "title": "구독 화면 (S10 /subscribe)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "월 7,900원 구독 혜택(무제한 세션+모의시험+ROI 리포트)을 안내하고 TossPurchase(IAP)로 결제한다. 결제 성공 콜백 시 meta.isSubscribed=true 반영, 혜택 목록과 가격을 표시한다. location.state RouteState['/subscribe'](from) 캐스팅으로 진입 출처를 처리한다.",
+      "acceptance_criteria": [
+        "혜택 목록(무제한 세션/모의시험/ROI 리포트) + 가격 7,900원 표시",
+        "TossPurchase sku=import.meta.env.VITE_TOSS_IAP_SKU 사용, onPurchased 시 meta.isSubscribed=true 저장",
+        "결제 성공 후 useAppStore isSubscribed===true 반영"
+      ]
+    },
+    "covers": [
+      "F6-AC2"
+    ],
+    "files": [
+      "src/pages/Subscribe.tsx"
+    ],
+    "definition_of_done": [
+      "TossPurchase 템플릿 컴포넌트 사용(재설계 금지)",
+      "processProductGrant/onPurchased로 meta 갱신",
+      "location.state 캐스팅으로 from 출처 안전 처리"
+    ],
+    "depends_on": [
+      "0003"
+    ],
+    "db_schema": "AppMeta.isSubscribed 갱신 → 'duotrack.meta'",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "PageShell + FixedBottomCTA. TDS: Top, Paragraph, ListRow, Chip, Spacing, Button. Layout: <Top title='구독'/> + 혜택 ListRow(무제한 세션/모의시험/ROI 리포트) + 가격 '월 7,900원' + 하단 <TossPurchase sku={VITE_TOSS_IAP_SKU} processProductGrant onPurchased/>. Interaction: 결제 성공 success 햅틱 후 meta.isSubscribed=true."
+  },
+  {
+    "id": "0016",
+    "title": "설정 화면 (S11 /settings)",
+    "epic": "Epic 3. Pages",
+    "task": {
+      "description": "프로필 요약, 구독 상태, 데이터 관리(오래된 기록 정리), AI 고지 재확인 링크를 제공한다. 용량 임계(isNearQuota) 시 정리 안내를 노출하고, 기록 삭제 시 AlertDialog로 확인한다. 외부 링크/앱 설치 유도 없음.",
+      "acceptance_criteria": [
+        "프로필·구독 상태 ListRow 표시",
+        "'오래된 기록 정리' 탭 시 AlertDialog 확인(왼쪽 버튼 '닫기') 후 storage 정리",
+        "isNearQuota()===true면 용량 경고 안내 노출"
+      ]
+    },
+    "covers": [
+      "F7-AC5"
+    ],
+    "files": [
+      "src/pages/Settings.tsx"
+    ],
+    "definition_of_done": [
+      "AlertDialog 왼쪽 버튼 '닫기'(취소 금지)",
+      "integrity.isNearQuota 사용",
+      "외부 링크·앱 설치 유도 문구 없음"
+    ],
+    "depends_on": [
+      "0003",
+      "0005"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "PageShell. TDS: Top, ListRow, Switch, Spacing, Button, AlertDialog, Toast. Layout: <Top title='설정'/> + 프로필 요약 ListRow + 구독 상태 ListRow + '오래된 기록 정리' ListRow(onClick→AlertDialog) + 용량 경고 Paragraph(isNearQuota). Interaction: 정리 확인 AlertDialog 왼쪽 '닫기'/오른쪽 '정리하기'. 해요체·긍정형 문구."
+  },
+  {
+    "id": "0017",
+    "title": "라우터 배선 + 온보딩 리다이렉트 + 주간 리셋",
+    "epic": "Epic 4. Integration",
+    "task": {
+      "description": "App.tsx에 11개 Route를 react-router-dom으로 정의하고 AppStoreProvider로 감싼다. 앱 진입 시 maybeResetWeek를 트리거해 주간 카운터를 리셋하고, 메인 4탭(홈/학습/점수/문제) FloatingTabBar를 배선한다. Route 키 집합이 RouteState와 1:1 일치하는지 확인한다.",
+      "acceptance_criteria": [
+        "'/','/diagnose','/diagnose/quiz','/diagnose/result','/home','/session','/exams','/problems','/report','/subscribe','/settings' 11개 Route 정의 및 렌더",
+        "앱 진입 시 maybeResetWeek(meta,now) 1회 호출로 주간 카운터 리셋",
+        "FloatingTabBar 4탭(홈/학습/점수/문제) 활성탭 컬러 틴트, main.tsx 미수정"
+      ]
+    },
+    "covers": [
+      "F7-AC1",
+      "라우팅 계약 — RouteState 1:1"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "Route 키 집합이 RouteState와 1:1 일치 검증",
+      "AppStoreProvider로 전체 래핑",
+      "main.tsx의 @AI:ANCHOR 미수정, FloatingTabBar 템플릿 사용"
+    ],
+    "depends_on": [
+      "0006",
+      "0007",
+      "0008",
+      "0009",
+      "0010",
+      "0011",
+      "0012",
+      "0013",
+      "0014",
+      "0015",
+      "0016"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "react-router-dom"
+    ],
+    "ui_requirements": "App 레이아웃: <AppStoreProvider><BrowserRouter><Routes>...11 Route</Routes><FloatingTabBar/></BrowserRouter></AppStoreProvider>. FloatingTabBar 4탭: 홈(/home)·학습(/session)·점수(/exams)·문제(/problems). 탭 전환 tickWeak 햅틱. position:fixed 하단은 paddingBottom calc + env(safe-area-inset-bottom)."
+  },
+  {
+    "id": "0018",
+    "title": "광고 배치 감사 + AI 배지 감사 + 최종 UX 폴리시",
+    "epic": "Epic 4. Integration",
+    "task": {
+      "description": "App.tsx 레벨에서 최종 감사를 수행한다. 세션 화면 광고 0개, 결과/리포트 화면에만 AdSlot/TossRewardAd 배치, 3개 AI 결과물 화면(진단결과/문제/리포트)의 data-testid='ai-badge' 존재를 확인한다. 다크모드 색상 토큰, 터치 타겟 44px, safe-area를 점검한다.",
+      "acceptance_criteria": [
+        "세션 화면 DOM 광고 요소 0개, 광고는 결과/리포트 화면에만 존재 확인",
+        "진단결과·문제·리포트 3개 화면 모두 data-testid='ai-badge' 노출 확인",
+        "HEX 하드코딩 0건(var(--tds-color-*)만), 인터랙티브 요소 ≥44px, 하단 fixed 요소 safe-area padding 적용"
+      ]
+    },
+    "covers": [
+      "F2-AC2",
+      "F1-AC4",
+      "F5-AC7 배지 감사"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "AI 배지 3개 화면 교차 검증",
+      "광고 정책(세션 무광고) 위반 0",
+      "다크모드·터치타겟·safe-area 점검 완료"
+    ],
+    "depends_on": [
+      "0017"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "감사 체크리스트: (1) Session에 AdSlot/TossRewardAd import·렌더 없음, (2) DiagnoseResult/Problems/Report에 data-testid='ai-badge' 존재, (3) 모든 Button/ListRow 터치타겟 ≥44px, (4) HEX 색상 없음 var(--tds-color-*)만, (5) fixed 하단 paddingBottom calc(Npx + env(safe-area-inset-bottom)). 템플릿 AdSlot/TossRewardAd/TossPurchase 재설계 금지."
+  },
+  {
+    "id": "0019",
+    "title": "라우팅 와이어링 + Provider 연결 + 통합 폴리시",
+    "epic": "4",
+    "task": {
+      "description": "App.tsx에 모든 페이지(Onboarding.tsx, Diagnose.tsx, DiagnoseQuiz.tsx, DiagnoseResult.tsx, Home.tsx, Session.tsx, Exams.tsx, Problems.tsx, Report.tsx, Subscribe.tsx, Settings.tsx) Route 연결, main.tsx 수정 금지(@AI:ANCHOR), 광고/결제 연동, 최종 UX 폴리시",
+      "acceptance_criteria": [
+        "App.tsx에 모든 페이지 Route가 정의되어 있다",
+        "모든 navigate() 대상에 Route가 존재한다",
+        "main.tsx의 TDSMobileAITProvider/BrowserRouter가 유지되어 있다",
+        "앱이 '/' 경로에서 정상 렌더링된다"
+      ]
+    },
+    "files": [
+      "src/App.tsx"
+    ],
+    "covers": [],
+    "definition_of_done": [
+      "typecheck pass",
+      "all routes accessible",
+      "no console errors"
+    ],
+    "depends_on": [
+      "0018"
+    ]
+  }
+]
